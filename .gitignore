@@ -1,0 +1,154 @@
+# ======================================
+# PYTHON
+# ======================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+.venv
+ENV/
+env.bak/
+venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ======================================
+# LANGGRAPH SPECIFICI
+# ======================================
+.langgraph_api/
+.langgraph/
+*.checkpoint
+checkpoint_*
+*.graph
+.graph_cache/
+
+# ======================================
+# CONFIGURAZIONE E SEGRETI
+# ======================================
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+config.ini
+secrets.json
+*.key
+*.pem
+.credentials/
+
+# ======================================
+# JUPYTER NOTEBOOKS
+# ======================================
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+*.ipynb
+
+# ======================================
+# MODELLI E DATI
+# ======================================
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+*.model
+data/
+datasets/
+models/
+checkpoints/
+
+# ======================================
+# LOGS
+# ======================================
+*.log
+logs/
+log/
+*.out
+
+# ======================================
+# FILE DI SISTEMA
+# ======================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ======================================
+# EDITOR E IDE
+# ======================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+.spyderproject
+.spyproject
+
+# ======================================
+# BUILD E DISTRIBUZIONE
+# ======================================
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ======================================
+# TESTING
+# ======================================
+.nox/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# ======================================
+# TEMPORARY E BACKUP
+# ======================================
+*.tmp
+*.temp
+*.bak
+*~
+.#*
+#*#
+
+# ======================================
+# DATABASE SCARICATI
+# ======================================
+travel2.sqlite
+travel2.backup.sqlite
+*.sqlite
