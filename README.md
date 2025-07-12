@@ -1,6 +1,6 @@
-# 🛫 Swiss Airlines Customer Support AI
+# 🛫 Customer Support Multi Agent AI (Travel)
 
-A sophisticated multi-workflow customer support AI system built with LangGraph, providing comprehensive assistance for flight management, hotel bookings, car rentals, and trip recommendations.
+A multi-workflow customer support AI system built with LangGraph, providing comprehensive assistance for flight management, hotel bookings, car rentals, and trip recommendations.
 
 ## 📚 Based on LangGraph Tutorial
 
