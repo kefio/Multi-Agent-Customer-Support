@@ -1,9 +1,29 @@
+"""
+Swiss Airlines Customer Support AI - Streamlit Web Interface
+
+This module provides a user-friendly web interface for the Swiss Airlines Customer Support AI
+system using Streamlit. The application offers an interactive chat interface with setup
+management, conversation history, and human-in-the-loop approval for sensitive operations.
+
+Features:
+    - Interactive chat interface for customer support conversations
+    - Automatic setup management for database and vector store initialization
+    - Human approval workflow for sensitive booking operations
+    - Conversation history and thread management
+    - Real-time status monitoring and error handling
+    - Multi-language support preparation
+
+The interface handles the complete user journey from initial setup through complex
+multi-workflow conversations, providing a seamless experience for both customers
+and support representatives.
+"""
+
 import streamlit as st
 import uuid
 from dotenv import load_dotenv
 from langchain_core.messages import ToolMessage
 
-# Carica le variabili d'ambiente
+# Load environment variables for API keys and configuration
 load_dotenv()
 
 from customer_support_agent.main_graph import graph
@@ -16,120 +36,144 @@ from customer_support_agent.setup import (
     initialize_vector_store
 )
 
-# Configurazione della pagina
+# === STREAMLIT CONFIGURATION ===
+# Configure the Streamlit page with appropriate metadata and layout
 st.set_page_config(
     page_title="Customer Support AI",
     page_icon="✈️",
     layout="wide"
 )
 
-# Inizializza lo stato della sessione
+# === SESSION STATE INITIALIZATION ===
+# Initialize all required session state variables for conversation management
+
+# Conversation history - stores all messages in the current session
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+# Unique thread identifier for conversation persistence and memory management
 if "thread_id" not in st.session_state:
     st.session_state.thread_id = str(uuid.uuid4())
+
+# Human approval workflow state - tracks when user approval is required
 if "waiting_for_approval" not in st.session_state:
     st.session_state.waiting_for_approval = False
+
+# Stores the event that triggered the approval request
 if "pending_event" not in st.session_state:
     st.session_state.pending_event = None
+
+# System setup completion status
 if "setup_complete" not in st.session_state:
     st.session_state.setup_complete = check_setup_complete()
 
-# Controlla lo stato del setup
+# Check current setup status for component availability
 setup_status = get_setup_status()
 
-# Sidebar per configurazioni
-st.sidebar.title("Configurazioni")
+# === SIDEBAR CONFIGURATION ===
+# Create sidebar interface for user configuration and session management
+
+st.sidebar.title("Configuration")
+
+# Passenger ID input for personalized flight information retrieval
 passenger_id = st.sidebar.text_input(
     "Passenger ID", 
     value="3442 587242",
-    help="ID del passeggero per recuperare le informazioni del volo"
+    help="Passenger ID to retrieve flight information and booking details"
 )
 
-if st.sidebar.button("Nuova Conversazione"):
+# New conversation button - resets all session state for fresh start
+if st.sidebar.button("New Conversation"):
     st.session_state.messages = []
     st.session_state.thread_id = str(uuid.uuid4())
     st.session_state.waiting_for_approval = False
     st.session_state.pending_event = None
     st.rerun()
 
-# Titolo principale
+# === MAIN INTERFACE ===
+# Main application title and description
 st.title("🛫 Customer Support AI")
-st.markdown("Assistente AI per prenotazioni di voli, hotel, noleggio auto ed escursioni")
+st.markdown("AI Assistant for flight, hotel, car rental, and excursion bookings")
 
-# Controlla se il setup è completo
+# === SETUP MANAGEMENT INTERFACE ===
+# Display setup interface if system components are not ready
 if not setup_status["setup_complete"]:
-    # Mostra interfaccia di setup
-    st.warning("⚠️ Setup iniziale richiesto")
-    st.markdown("Prima di utilizzare l'assistente, è necessario scaricare il database e inizializzare il vector store.")
+    # Setup required warning
+    st.warning("⚠️ Initial Setup Required")
+    st.markdown("Before using the assistant, you need to download the database and initialize the vector store.")
     
-    # Mostra lo stato attuale
+    # Display current component status
     col1, col2 = st.columns(2)
     
     with col1:
         if setup_status["database_exists"]:
-            st.success("✅ Database già scaricato")
+            st.success("✅ Database already downloaded")
         else:
-            st.error("❌ Database non trovato")
+            st.error("❌ Database not found")
     
     with col2:
         if setup_status["vector_store_exists"]:
-            st.success("✅ Vector store già inizializzato")
+            st.success("✅ Vector store already initialized")
         else:
-            st.error("❌ Vector store non trovato")
+            st.error("❌ Vector store not found")
     
     st.markdown("---")
     
-    # Pulsanti per azioni individuali
+    # Individual setup action buttons
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("📥 Scarica Database", disabled=setup_status["database_exists"]):
-            with st.spinner("Scaricando database..."):
+        # Database download button - only enabled if database is missing
+        if st.button("📥 Download Database", disabled=setup_status["database_exists"]):
+            with st.spinner("Downloading database..."):
                 if download_database():
-                    st.success("Database scaricato con successo!")
+                    st.success("Database downloaded successfully!")
                     st.rerun()
                 else:
-                    st.error("Errore durante il download del database")
+                    st.error("Error downloading database")
     
     with col2:
-        if st.button("🔄 Inizializza Vector Store", disabled=setup_status["vector_store_exists"]):
-            with st.spinner("Inizializzando vector store..."):
+        # Vector store initialization - only enabled if not already initialized
+        if st.button("🔄 Initialize Vector Store", disabled=setup_status["vector_store_exists"]):
+            with st.spinner("Initializing vector store..."):
                 if initialize_vector_store():
-                    st.success("Vector store inizializzato con successo!")
+                    st.success("Vector store initialized successfully!")
                     st.rerun()
                 else:
-                    st.error("Errore durante l'inizializzazione del vector store")
+                    st.error("Error initializing vector store")
     
     with col3:
-        if st.button("🚀 Setup Completo", type="primary"):
-            with st.spinner("Eseguendo setup completo..."):
+        # Complete setup button - performs all required setup steps
+        if st.button("🚀 Complete Setup", type="primary"):
+            with st.spinner("Running complete setup..."):
                 if run_full_setup():
-                    st.success("Setup completato con successo!")
+                    st.success("Setup completed successfully!")
                     st.balloons()
                     st.rerun()
                 else:
-                    st.error("Errore durante il setup")
+                    st.error("Error during setup")
     
     st.markdown("---")
-    st.info("💡 **Nota:** Il setup completo scaricherà il database e inizializzerà il vector store automaticamente.")
+    st.info("💡 **Note:** Complete setup will automatically download the database and initialize the vector store.")
     
 else:
-    # Setup completato - mostra la chat normale
+    # === MAIN CHAT INTERFACE ===
+    # Setup completed - display normal chat interface
     
-    # Aggiorna il database con le date corrette (solo se setup è completo)
+    # Update database with current dates for realistic demo experience
     if setup_status["setup_complete"]:
         db = update_dates(local_file)
     
-    # Area della chat
+    # Chat message container for conversation display
     chat_container = st.container()
     
-    # Input per i messaggi
-    if prompt := st.chat_input("Scrivi il tuo messaggio..."):
-        # Aggiungi il messaggio dell'utente
+    # === MESSAGE PROCESSING ===
+    # Handle user input and conversation flow
+    if prompt := st.chat_input("Type your message..."):
+        # Add user message to conversation history
         st.session_state.messages.append({"role": "user", "content": prompt})
         
-        # Configurazione per il grafo
+        # Configuration for graph execution with user context
         config = {
             "configurable": {
                 "passenger_id": passenger_id,
@@ -137,13 +181,14 @@ else:
             }
         }
         
-        # Gestisci le approvazioni
+        # === HUMAN APPROVAL WORKFLOW ===
+        # Handle approval requests for sensitive operations
         if st.session_state.waiting_for_approval:
             if prompt.strip().lower() == "y":
-                # Approva l'azione
+                # User approved the operation - continue execution
                 result = graph.invoke(None, config)
             else:
-                # Nega l'azione con spiegazione
+                # User denied the operation - provide explanation and continue
                 result = graph.invoke(
                     {
                         "messages": [
@@ -156,85 +201,75 @@ else:
                     config,
                 )
             
-            # Reset dello stato di attesa
+            # Reset approval state after handling
             st.session_state.waiting_for_approval = False
             st.session_state.pending_event = None
             
-            # Controlla se ci sono altre interruzioni
+            # Check if additional approvals are needed
             snapshot = graph.get_state(config)
             if snapshot.next:
                 st.session_state.waiting_for_approval = True
                 st.session_state.pending_event = {"messages": [result["messages"][-1]]}
         else:
-            # Nuova conversazione normale
+            # === NORMAL CONVERSATION FLOW ===
+            # Process new user message through the graph
             events = graph.stream(
                 {"messages": ("user", prompt)}, 
                 config, 
                 stream_mode="values"
             )
             
-            # Processa gli eventi
+            # Process all events and collect assistant responses
             for event in events:
                 if event.get("messages"):
                     last_message = event["messages"][-1]
                     if hasattr(last_message, 'content') and last_message.content:
-                        # Aggiungi la risposta dell'assistente
+                        # Add assistant response to conversation history
                         st.session_state.messages.append({
                             "role": "assistant", 
                             "content": last_message.content
                         })
             
-            # Controlla se ci sono interruzioni
+            # === APPROVAL REQUEST DETECTION ===
+            # Check if the conversation was interrupted for human approval
             snapshot = graph.get_state(config)
             if snapshot.next:
                 st.session_state.waiting_for_approval = True
                 st.session_state.pending_event = event
                 
-                # Mostra il messaggio di richiesta approvazione
+                # Display approval request interface
                 if event.get("messages"):
                     last_message = event["messages"][-1]
                     if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
                         tool_call = last_message.tool_calls[0]
-                        approval_msg = f"🔄 **Richiesta di approvazione:**\n\n"
-                        approval_msg += f"**Strumento:** {tool_call['name']}\n"
-                        approval_msg += f"**Parametri:** {tool_call['args']}\n\n"
-                        approval_msg += "Vuoi che proceda con questa azione?\n"
-                        approval_msg += "- Scrivi **'y'** per approvare\n"
-                        approval_msg += "- Oppure spiega cosa vorresti cambiare"
+                        approval_msg = f"🔄 **Approval Request:**\n\n"
+                        approval_msg += f"**Tool:** {tool_call['name']}\n"
+                        approval_msg += f"**Parameters:** {tool_call['args']}\n\n"
+                        approval_msg += "**Please confirm:** Type 'y' to approve or explain why you're declining."
                         
                         st.session_state.messages.append({
-                            "role": "assistant", 
+                            "role": "assistant",
                             "content": approval_msg
                         })
 
-    # Visualizza i messaggi della chat
+    # === CONVERSATION DISPLAY ===
+    # Render all messages in the conversation history
     with chat_container:
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-# Stato della conversazione nella sidebar
-st.sidebar.markdown("---")
-st.sidebar.markdown("**Stato Sistema:**")
-
-# Mostra stato setup
-if setup_status["setup_complete"]:
-    st.sidebar.success("✅ Setup completato")
-else:
-    st.sidebar.error("❌ Setup richiesto")
-
-# Mostra dettagli setup
-with st.sidebar.expander("Dettagli Setup"):
-    st.write(f"Database: {'✅' if setup_status['database_exists'] else '❌'}")
-    st.write(f"Vector Store: {'✅' if setup_status['vector_store_exists'] else '❌'}")
-
-# Stato conversazione (solo se setup è completo)
-if setup_status["setup_complete"]:
-    st.sidebar.markdown("**Stato Conversazione:**")
-    st.sidebar.markdown(f"Thread ID: `{st.session_state.thread_id[:8]}...`")
-    st.sidebar.markdown(f"Messaggi: {len(st.session_state.messages)}")
-    
+    # === STATUS INDICATORS ===
+    # Display current system status and workflow information
     if st.session_state.waiting_for_approval:
-        st.sidebar.warning("⏳ In attesa di approvazione")
-    else:
-        st.sidebar.success("✅ Pronto per nuovi messaggi") 
+        st.warning("⏳ Waiting for your approval to proceed with the requested action.")
+    
+    # Display conversation thread ID for debugging and support
+    with st.sidebar:
+        st.markdown("---")
+        st.caption(f"Thread ID: {st.session_state.thread_id}")
+        st.caption(f"Messages: {len(st.session_state.messages)}")
+        
+        # Display active workflow if available (for debugging)
+        if hasattr(st.session_state, 'current_workflow'):
+            st.caption(f"Active workflow: {st.session_state.current_workflow}") 

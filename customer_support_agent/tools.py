@@ -1,42 +1,113 @@
+"""
+Tools Module - Customer Support AI Tools for Swiss Airlines
+
+This module provides a comprehensive set of tools for managing customer bookings
+and inquiries across multiple domains: flights, hotels, car rentals, and excursions.
+Each tool is implemented as a LangChain tool with proper error handling and validation.
+
+The module includes:
+- Policy lookup and company guidelines consultation
+- Flight search, booking updates, and cancellations
+- Hotel search, booking, and management
+- Car rental search, booking, and management  
+- Trip recommendations and excursion bookings
+- Workflow delegation tools for specialized assistants
+
+All tools interact with a SQLite database containing booking information
+and enforce business rules for customer operations.
+"""
+
 import sqlite3
 from datetime import datetime, date
 from typing import Optional, Union
-import numpy as np #questo è per gestire i numeri
-from langchain_core.tools import tool #questo è per creare le tools
-import pytz #questo è per gestire i fusi orari
-from langchain_core.runnables import RunnableConfig # questo è per gestire la configurazione dei runnables
+import numpy as np  # For numerical operations
+from langchain_core.tools import tool  # For creating LangChain tools
+import pytz  # For timezone handling
+from langchain_core.runnables import RunnableConfig  # For runnable configuration
 from customer_support_agent.policy_retriever import load_policy_retriever
 from customer_support_agent.utils import local_file, backup_file, update_dates
 from pydantic import BaseModel, Field
 
-
+# Global policy retriever instance - initialized during setup
 retriever = None
 
 
 # === BASIC TOOLS ===
+
 @tool
 def lookup_policy(query: str) -> str:
-    """Consult the company policies to check whether certain options are permitted.
-    Use this before making any flight changes performing other 'write' events."""
+    """
+    Consult company policies to check whether certain options are permitted.
+    
+    This tool searches through Swiss Airlines' policy documents to provide
+    guidance on what actions are allowed for customer requests. It should be
+    used before making any flight changes or performing other sensitive operations.
+    
+    Args:
+        query: Natural language query about company policies or specific scenarios
+        
+    Returns:
+        Relevant policy information as formatted text
+        
+    Examples:
+        >>> lookup_policy("Can I reschedule a flight within 3 hours of departure?")
+        "Flight changes are not permitted within 3 hours of scheduled departure time..."
+        
+        >>> lookup_policy("What are the fees for hotel cancellations?")
+        "Hotel cancellation policies vary by booking type..."
+    """
     global retriever
     docs = retriever.query(query, k=2)
     return "\n\n".join([doc["page_content"] for doc in docs])
-
-
-
 
 
 # === FLIGHT TOOLS ===
 
 @tool
 def fetch_user_flight_information(config: RunnableConfig) -> list[dict]:
-    """Fetch all tickets for the user along with corresponding flight information and seat assignments.
+    """
+    Fetch comprehensive flight information for the authenticated user.
+
+    Retrieves all tickets, flight details, and seat assignments for the current
+    passenger. This includes booking references, flight schedules, airport codes,
+    and seat allocations across all active bookings.
+
+    Args:
+        config: Runtime configuration containing passenger_id in configurable section
 
     Returns:
-        A list of dictionaries where each dictionary contains the ticket details,
-        associated flight details, and the seat assignments for each ticket belonging to the user.
-    """
+        List of dictionaries containing:
+        - ticket_no: Unique ticket identifier
+        - book_ref: Booking reference number
+        - flight_id: Internal flight identifier
+        - flight_no: Public flight number
+        - departure_airport: IATA airport code for departure
+        - arrival_airport: IATA airport code for arrival
+        - scheduled_departure: Planned departure datetime
+        - scheduled_arrival: Planned arrival datetime
+        - seat_no: Assigned seat number
+        - fare_conditions: Ticket class (economy, business, etc.)
 
+    Raises:
+        ValueError: If passenger_id is not provided in configuration
+        
+    Example:
+        Returns data like:
+        [
+            {
+                "ticket_no": "0005432000987",
+                "book_ref": "00BFBB",
+                "flight_id": 1185,
+                "flight_no": "PG0134",
+                "departure_airport": "DME",
+                "arrival_airport": "BTK",
+                "scheduled_departure": "2024-12-15 10:25:00+03:00",
+                "scheduled_arrival": "2024-12-15 14:15:00+05:00",
+                "seat_no": "2A",
+                "fare_conditions": "Business"
+            }
+        ]
+    """
     configuration = config.get("configurable", {})
     passenger_id = configuration.get("passenger_id", None)
     if not passenger_id:
@@ -44,10 +115,13 @@ def fetch_user_flight_information(config: RunnableConfig) -> list[dict]:
     
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
+    
+    # Join tickets, flights, and boarding passes to get complete picture
     query = """
     SELECT 
         t.ticket_no, t.book_ref,
-        f.flight_id, f.flight_no, f.departure_airport, f.arrival_airport, f.scheduled_departure, f.scheduled_arrival,
+        f.flight_id, f.flight_no, f.departure_airport, f.arrival_airport, 
+        f.scheduled_departure, f.scheduled_arrival,
         bp.seat_no, tf.fare_conditions
     FROM 
         tickets t
@@ -66,7 +140,7 @@ def fetch_user_flight_information(config: RunnableConfig) -> list[dict]:
     conn.close()
 
     return results
-    
+
 @tool
 def search_flights(
     departure_airport: Optional[str] = None,
@@ -75,22 +149,42 @@ def search_flights(
     end_time: Optional[str] = None,
     limit: int = 20,
 ) -> list[dict]:
-    """Search for flights based on the given parameters.
+    """
+    Search for available flights based on specified criteria.
     
+    Provides flexible flight search capabilities with optional filtering by
+    airports, time ranges, and result limits. All parameters are optional
+    to allow broad or specific searches based on customer needs.
+
     Args:
-        departure_airport: The departure airport code.
-        arrival_airport: The arrival airport code.
-        start_time: The start time of the flight.
-        end_time: The end time of the flight.
-        limit: The maximum number of flights to return.
+        departure_airport: IATA airport code for departure (e.g., "JFK", "LAX")
+        arrival_airport: IATA airport code for arrival (e.g., "LHR", "CDG")
+        start_time: Earliest departure time (ISO format: "2024-12-15 10:00:00")
+        end_time: Latest departure time (ISO format: "2024-12-15 18:00:00")
+        limit: Maximum number of results to return (default: 20)
 
     Returns:
-        A list of dictionaries where each dictionary contains the flight details.
-    """
+        List of flight dictionaries containing:
+        - flight_id: Unique flight identifier
+        - flight_no: Public flight number (e.g., "LH123")
+        - departure_airport: Origin airport code
+        - arrival_airport: Destination airport code
+        - scheduled_departure: Departure datetime
+        - scheduled_arrival: Arrival datetime
+        - aircraft_code: Aircraft type identifier
+        - status: Flight status (Scheduled, Departed, Arrived, etc.)
 
+    Examples:
+        >>> search_flights(departure_airport="JFK", arrival_airport="LHR")
+        [{"flight_id": 1234, "flight_no": "BA123", ...}]
+        
+        >>> search_flights(start_time="2024-12-15 10:00:00", limit=5)
+        [{"flight_id": 5678, "flight_no": "LH456", ...}]
+    """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
 
+    # Build dynamic query based on provided parameters
     query = "SELECT * FROM flights WHERE 1 = 1"
     params = []
 
@@ -109,8 +203,10 @@ def search_flights(
     if end_time:
         query += " AND scheduled_departure <= ?"
         params.append(end_time)
+        
     query += " LIMIT ?"
     params.append(limit)
+    
     cursor.execute(query, params)
     rows = cursor.fetchall()
     column_names = [column[0] for column in cursor.description]
@@ -119,13 +215,37 @@ def search_flights(
     cursor.close()
     conn.close()
 
-    return results   
+    return results
 
 @tool
 def update_ticket_to_new_flight(
     ticket_no: str, new_flight_id: int, *, config: RunnableConfig
 ) -> str:
-    """Update the user's ticket to a new valid flight."""
+    """
+    Update the user's ticket to a new valid flight.
+    
+    This tool allows the AI to change the flight associated with a specific
+    ticket number to a new, valid flight. It includes validation to ensure
+    the new flight is not too close in time to the current time.
+
+    Args:
+        ticket_no (str): The unique identifier of the ticket to update.
+        new_flight_id (int): The ID of the new flight to assign.
+        config: Runtime configuration containing passenger_id.
+
+    Returns:
+        str: Success or error message.
+        
+    Raises:
+        ValueError: If passenger_id is not provided in configuration.
+        
+    Example:
+        >>> update_ticket_to_new_flight("0001234567890", 1234, config={"configurable": {"passenger_id": "12345"}})
+        "Ticket successfully updated to new flight."
+        
+        >>> update_ticket_to_new_flight("0001234567890", 1234, config={"configurable": {"passenger_id": "12346"}})
+        "Current signed-in passenger with ID 12346 not the owner of ticket 0001234567890"
+    """
     configuration = config.get("configurable", {})
     passenger_id = configuration.get("passenger_id", None)
     if not passenger_id:
@@ -191,7 +311,29 @@ def update_ticket_to_new_flight(
 
 @tool
 def cancel_ticket(ticket_no: str, *, config: RunnableConfig) -> str:
-    """Cancel the user's ticket and remove it from the database."""
+    """
+    Cancel the user's ticket and remove it from the database.
+    
+    This tool allows the AI to remove a ticket from the system,
+    which includes deleting the corresponding ticket_flights entry.
+
+    Args:
+        ticket_no (str): The unique identifier of the ticket to cancel.
+        config: Runtime configuration containing passenger_id.
+
+    Returns:
+        str: Success or error message.
+        
+    Raises:
+        ValueError: If passenger_id is not provided in configuration.
+        
+    Example:
+        >>> cancel_ticket("0001234567890", config={"configurable": {"passenger_id": "12345"}})
+        "Ticket successfully cancelled."
+        
+        >>> cancel_ticket("0001234567890", config={"configurable": {"passenger_id": "12346"}})
+        "Current signed-in passenger with ID 12346 not the owner of ticket 0001234567890"
+    """
     configuration = config.get("configurable", {})
     passenger_id = configuration.get("passenger_id", None)
     if not passenger_id:
@@ -241,17 +383,38 @@ def search_hotels(
     checkout_date: Optional[Union[datetime, date]] = None,
 ) -> list[dict]:
     """
-    Search for hotels based on location, name, price tier, check-in date, and check-out date.
+    Search for available hotels based on specified criteria.
+    
+    Provides comprehensive hotel search functionality with flexible filtering
+    options including location, hotel name, price tier, and date ranges.
+    All parameters are optional to allow broad or targeted searches.
 
     Args:
-        location (Optional[str]): The location of the hotel. Defaults to None.
-        name (Optional[str]): The name of the hotel. Defaults to None.
-        price_tier (Optional[str]): The price tier of the hotel. Defaults to None. Examples: Midscale, Upper Midscale, Upscale, Luxury
-        checkin_date (Optional[Union[datetime, date]]): The check-in date of the hotel. Defaults to None.
-        checkout_date (Optional[Union[datetime, date]]): The check-out date of the hotel. Defaults to None.
+        location: Geographic location or city name (e.g., "New York", "Paris")
+        name: Specific hotel name or partial name for filtering
+        price_tier: Hotel category/price level. Options include:
+            - "Midscale": Budget-friendly options
+            - "Upper Midscale": Mid-range comfort
+            - "Upscale": Premium accommodations  
+            - "Luxury": High-end luxury hotels
+        checkin_date: Planned arrival date (datetime or date object)
+        checkout_date: Planned departure date (datetime or date object)
 
     Returns:
-        list[dict]: A list of hotel dictionaries matching the search criteria.
+        List of hotel dictionaries containing:
+        - id: Unique hotel identifier
+        - name: Hotel name
+        - location: Hotel address/location
+        - price_tier: Hotel category
+        - rating: Hotel star rating or quality score
+        - amenities: Available hotel features and services
+        
+    Examples:
+        >>> search_hotels(location="Paris", price_tier="Upscale")
+        [{"id": 123, "name": "Hotel Ritz Paris", "price_tier": "Luxury", ...}]
+        
+        >>> search_hotels(checkin_date=date(2024, 12, 15), checkout_date=date(2024, 12, 20))
+        [{"id": 456, "name": "City Center Hotel", "location": "Downtown", ...}]
     """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
@@ -278,13 +441,23 @@ def search_hotels(
 @tool
 def book_hotel(hotel_id: int) -> str:
     """
-    Book a hotel by its ID.
+    Book a hotel reservation using the hotel's unique identifier.
+    
+    Marks the specified hotel as booked in the system by updating its
+    booking status. This is a simplified booking process for demo purposes.
 
     Args:
-        hotel_id (int): The ID of the hotel to book.
+        hotel_id: Unique identifier of the hotel to book
 
     Returns:
-        str: A message indicating whether the hotel was successfully booked or not.
+        Success message if booking completed, error message if hotel not found
+        
+    Examples:
+        >>> book_hotel(123)
+        "Hotel 123 successfully booked."
+        
+        >>> book_hotel(999)
+        "No hotel found with ID 999."
     """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
@@ -306,15 +479,25 @@ def update_hotel(
     checkout_date: Optional[Union[datetime, date]] = None,
 ) -> str:
     """
-    Update a hotel's check-in and check-out dates by its ID.
+    Update hotel reservation dates for an existing booking.
+    
+    Modifies the check-in and/or check-out dates for a hotel reservation.
+    Either parameter can be updated independently or both can be changed together.
 
     Args:
-        hotel_id (int): The ID of the hotel to update.
-        checkin_date (Optional[Union[datetime, date]]): The new check-in date of the hotel. Defaults to None.
-        checkout_date (Optional[Union[datetime, date]]): The new check-out date of the hotel. Defaults to None.
+        hotel_id: Unique identifier of the hotel reservation to update
+        checkin_date: New check-in date (optional)
+        checkout_date: New check-out date (optional)
 
     Returns:
-        str: A message indicating whether the hotel was successfully updated or not.
+        Success message if update completed, error message if hotel not found
+        
+    Examples:
+        >>> update_hotel(123, checkin_date=date(2024, 12, 20))
+        "Hotel 123 successfully updated."
+        
+        >>> update_hotel(999, checkout_date=date(2024, 12, 25))
+        "No hotel found with ID 999."
     """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
@@ -341,13 +524,23 @@ def update_hotel(
 @tool
 def cancel_hotel(hotel_id: int) -> str:
     """
-    Cancel a hotel by its ID.
+    Cancel an existing hotel reservation.
+    
+    Removes the booking status from a hotel reservation, making it available
+    for new bookings. This operation cannot be undone.
 
     Args:
-        hotel_id (int): The ID of the hotel to cancel.
+        hotel_id: Unique identifier of the hotel reservation to cancel
 
     Returns:
-        str: A message indicating whether the hotel was successfully cancelled or not.
+        Success message if cancellation completed, error message if hotel not found
+        
+    Examples:
+        >>> cancel_hotel(123)
+        "Hotel 123 successfully cancelled."
+        
+        >>> cancel_hotel(999)  
+        "No hotel found with ID 999."
     """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
@@ -368,6 +561,7 @@ def cancel_hotel(hotel_id: int) -> str:
 
 
 # === CAR RENTAL TOOLS ===
+
 @tool
 def search_car_rentals(
     location: Optional[str] = None,
@@ -377,17 +571,35 @@ def search_car_rentals(
     end_date: Optional[Union[datetime, date]] = None,
 ) -> list[dict]:
     """
-    Search for car rentals based on location, name, price tier, start date, and end date.
+    Search for available car rental options based on specified criteria.
+    
+    Provides comprehensive car rental search functionality with flexible filtering
+    by location, rental company, price tier, and rental period. All parameters
+    are optional to support both broad searches and specific requirements.
 
     Args:
-        location (Optional[str]): The location of the car rental. Defaults to None.
-        name (Optional[str]): The name of the car rental company. Defaults to None.
-        price_tier (Optional[str]): The price tier of the car rental. Defaults to None.
-        start_date (Optional[Union[datetime, date]]): The start date of the car rental. Defaults to None.
-        end_date (Optional[Union[datetime, date]]): The end date of the car rental. Defaults to None.
+        location: Geographic location or city for car pickup (e.g., "Los Angeles", "London")
+        name: Rental company name or partial name (e.g., "Hertz", "Avis", "Enterprise")
+        price_tier: Vehicle category or price range (e.g., "Economy", "Compact", "Luxury")
+        start_date: Rental start date (when customer picks up the car)
+        end_date: Rental end date (when customer returns the car)
 
     Returns:
-        list[dict]: A list of car rental dictionaries matching the search criteria.
+        List of car rental dictionaries containing:
+        - id: Unique rental option identifier
+        - name: Rental company name
+        - location: Pickup/return location
+        - vehicle_type: Car category (compact, SUV, luxury, etc.)
+        - price_tier: Pricing category
+        - daily_rate: Cost per day
+        - availability: Current booking status
+        
+    Examples:
+        >>> search_car_rentals(location="Miami", price_tier="Economy")
+        [{"id": 234, "name": "Budget Car Rental", "vehicle_type": "Compact", ...}]
+        
+        >>> search_car_rentals(start_date=date(2024, 12, 15), end_date=date(2024, 12, 20))
+        [{"id": 567, "name": "Enterprise", "location": "Airport", ...}]
     """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
@@ -415,13 +627,23 @@ def search_car_rentals(
 @tool
 def book_car_rental(rental_id: int) -> str:
     """
-    Book a car rental by its ID.
+    Book a car rental reservation using the rental option's unique identifier.
+    
+    Secures a car rental booking by marking the specified rental as booked
+    in the system. This is a simplified booking process for demo purposes.
 
     Args:
-        rental_id (int): The ID of the car rental to book.
+        rental_id: Unique identifier of the car rental option to book
 
     Returns:
-        str: A message indicating whether the car rental was successfully booked or not.
+        Success message if booking completed, error message if rental not found
+        
+    Examples:
+        >>> book_car_rental(234)
+        "Car rental 234 successfully booked."
+        
+        >>> book_car_rental(999)
+        "No car rental found with ID 999."
     """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
@@ -443,15 +665,25 @@ def update_car_rental(
     end_date: Optional[Union[datetime, date]] = None,
 ) -> str:
     """
-    Update a car rental's start and end dates by its ID.
+    Update rental dates for an existing car rental reservation.
+    
+    Modifies the pickup and/or return dates for a car rental booking.
+    Either parameter can be updated independently or both can be changed together.
 
     Args:
-        rental_id (int): The ID of the car rental to update.
-        start_date (Optional[Union[datetime, date]]): The new start date of the car rental. Defaults to None.
-        end_date (Optional[Union[datetime, date]]): The new end date of the car rental. Defaults to None.
+        rental_id: Unique identifier of the car rental reservation to update
+        start_date: New rental start date (when customer picks up the car)
+        end_date: New rental end date (when customer returns the car)
 
     Returns:
-        str: A message indicating whether the car rental was successfully updated or not.
+        Success message if update completed, error message if rental not found
+        
+    Examples:
+        >>> update_car_rental(234, start_date=date(2024, 12, 20))
+        "Car rental 234 successfully updated."
+        
+        >>> update_car_rental(999, end_date=date(2024, 12, 25))
+        "No car rental found with ID 999."
     """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
@@ -478,13 +710,23 @@ def update_car_rental(
 @tool
 def cancel_car_rental(rental_id: int) -> str:
     """
-    Cancel a car rental by its ID.
+    Cancel an existing car rental reservation.
+    
+    Removes the booking status from a car rental reservation, making the
+    vehicle available for new bookings. This operation cannot be undone.
 
     Args:
-        rental_id (int): The ID of the car rental to cancel.
+        rental_id: Unique identifier of the car rental reservation to cancel
 
     Returns:
-        str: A message indicating whether the car rental was successfully cancelled or not.
+        Success message if cancellation completed, error message if rental not found
+        
+    Examples:
+        >>> cancel_car_rental(234)
+        "Car rental 234 successfully cancelled."
+        
+        >>> cancel_car_rental(999)
+        "No car rental found with ID 999."
     """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
@@ -501,6 +743,7 @@ def cancel_car_rental(rental_id: int) -> str:
 
 
 # === EXCURSION TOOLS ===
+
 @tool
 def search_trip_recommendations(
     location: Optional[str] = None,
@@ -508,15 +751,35 @@ def search_trip_recommendations(
     keywords: Optional[str] = None,
 ) -> list[dict]:
     """
-    Search for trip recommendations based on location, name, and keywords.
+    Search for travel recommendations and excursion options based on specified criteria.
+    
+    Provides comprehensive search functionality for trip recommendations, tours,
+    activities, and excursions. Supports flexible filtering by location, specific
+    activity names, and keyword-based content matching.
 
     Args:
-        location (Optional[str]): The location of the trip recommendation. Defaults to None.
-        name (Optional[str]): The name of the trip recommendation. Defaults to None.
-        keywords (Optional[str]): The keywords associated with the trip recommendation. Defaults to None.
+        location: Geographic location or destination (e.g., "Paris", "Tokyo", "Tuscany")
+        name: Specific activity or tour name for targeted searches
+        keywords: Comma-separated keywords describing desired activities
+                 (e.g., "museum,art,culture" or "adventure,hiking,outdoor")
 
     Returns:
-        list[dict]: A list of trip recommendation dictionaries matching the search criteria.
+        List of trip recommendation dictionaries containing:
+        - id: Unique recommendation identifier
+        - name: Activity or excursion name
+        - location: Geographic location or venue
+        - description: Detailed activity description
+        - keywords: Associated activity tags and categories
+        - duration: Expected time commitment
+        - price_range: Cost information
+        - availability: Current booking status
+        
+    Examples:
+        >>> search_trip_recommendations(location="Paris", keywords="museum,art")
+        [{"id": 345, "name": "Louvre Museum Private Tour", "keywords": "museum,art,culture", ...}]
+        
+        >>> search_trip_recommendations(keywords="adventure,hiking")
+        [{"id": 678, "name": "Mountain Trail Adventure", "location": "Alps", ...}]
     """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
@@ -548,13 +811,23 @@ def search_trip_recommendations(
 @tool
 def book_excursion(recommendation_id: int) -> str:
     """
-    Book an excursion by its recommendation ID.
+    Book an excursion or trip recommendation using its unique identifier.
+    
+    Secures a booking for the specified trip recommendation, tour, or activity.
+    This marks the excursion as booked in the system.
 
     Args:
-        recommendation_id (int): The ID of the trip recommendation to book.
+        recommendation_id: Unique identifier of the trip recommendation to book
 
     Returns:
-        str: A message indicating whether the trip recommendation was successfully booked or not.
+        Success message if booking completed, error message if recommendation not found
+        
+    Examples:
+        >>> book_excursion(345)
+        "Trip recommendation 345 successfully booked."
+        
+        >>> book_excursion(999)
+        "No trip recommendation found with ID 999."
     """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
@@ -574,14 +847,24 @@ def book_excursion(recommendation_id: int) -> str:
 @tool
 def update_excursion(recommendation_id: int, details: str) -> str:
     """
-    Update a trip recommendation's details by its ID.
+    Update details for an existing excursion or trip recommendation booking.
+    
+    Modifies the details or special requirements for a booked excursion.
+    This could include time preferences, group size, accessibility needs, etc.
 
     Args:
-        recommendation_id (int): The ID of the trip recommendation to update.
-        details (str): The new details of the trip recommendation.
+        recommendation_id: Unique identifier of the trip recommendation to update
+        details: New details or special requirements for the excursion
 
     Returns:
-        str: A message indicating whether the trip recommendation was successfully updated or not.
+        Success message if update completed, error message if recommendation not found
+        
+    Examples:
+        >>> update_excursion(345, "Wheelchair accessible tour requested")
+        "Trip recommendation 345 successfully updated."
+        
+        >>> update_excursion(999, "Morning slot preferred")
+        "No trip recommendation found with ID 999."
     """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
@@ -602,13 +885,23 @@ def update_excursion(recommendation_id: int, details: str) -> str:
 @tool
 def cancel_excursion(recommendation_id: int) -> str:
     """
-    Cancel a trip recommendation by its ID.
+    Cancel an existing excursion or trip recommendation booking.
+    
+    Removes the booking status from an excursion reservation, making it
+    available for new bookings. This operation cannot be undone.
 
     Args:
-        recommendation_id (int): The ID of the trip recommendation to cancel.
+        recommendation_id: Unique identifier of the trip recommendation to cancel
 
     Returns:
-        str: A message indicating whether the trip recommendation was successfully cancelled or not.
+        Success message if cancellation completed, error message if recommendation not found
+        
+    Examples:
+        >>> cancel_excursion(345)
+        "Trip recommendation 345 successfully cancelled."
+        
+        >>> cancel_excursion(999)
+        "No trip recommendation found with ID 999."
     """
     conn = sqlite3.connect(local_file)
     cursor = conn.cursor()
@@ -632,7 +925,16 @@ def cancel_excursion(recommendation_id: int) -> str:
 
 class CompleteOrEscalate(BaseModel):    
     """
-    Complete the dialog or escalate it to the host assistant.
+    Control flow model for completing or escalating specialized assistant dialogs.
+    
+    Used by specialized assistants to signal when their task is complete
+    or when they need to transfer control back to the primary assistant.
+    This enables proper workflow transitions and prevents assistants from
+    handling requests outside their domain expertise.
+    
+    Attributes:
+        complete: Whether the current task is finished (default: True)
+        reason: Explanation for why the dialog is being completed or escalated
     """
     complete: bool = True
     reason: str = Field(description="The reason for completing or escalating the dialog.")
