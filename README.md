@@ -128,23 +128,13 @@ User: "Plan my entire trip to Rome - flight, hotel, and activities"
 AI: "I'll help coordinate your complete Rome trip across all services..."
 ```
 
-## 🏛️ Architecture
 
-### System Overview
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Streamlit     │    │   Main Graph     │    │   Workflows     │
-│   Interface     │◄──►│   (LangGraph)    │◄──►│   (Specialized) │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Session       │    │   State          │    │   Tools &       │
-│   Management    │    │   Management     │    │   Assistants    │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-```
 
 ### Main Graph Flow Architecture
+
+![Graph Architecture](images/graph-architecture.png)
+
+*Figure: Complete system flow showing the main graph architecture with specialized workflows, routing logic, and human-in-the-loop approval processes.*
 
 The system follows a sophisticated multi-workflow architecture where conversations flow through specialized assistants based on user intent and context:
 
