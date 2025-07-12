@@ -2,6 +2,17 @@
 
 A sophisticated multi-workflow customer support AI system built with LangGraph, providing comprehensive assistance for flight management, hotel bookings, car rentals, and trip recommendations.
 
+## 📚 Based on LangGraph Tutorial
+
+This project is an evolution and extension of the original LangGraph customer support tutorial notebook available at: https://github.com/langchain-ai/langgraph/blob/main/docs/docs/tutorials/customer-support/customer-support.ipynb
+
+The implementation has been enhanced with additional features including:
+- Multi-workflow conversation management
+- Streamlit web interface
+- Enhanced human-in-the-loop approval processes
+- Comprehensive tool integration
+- Production-ready architecture patterns
+
 ## 🌟 Features
 
 ### 🎯 Multi-Domain Support
@@ -69,6 +80,15 @@ The easiest way to interact with the system is through the Streamlit web interfa
 streamlit run streamlit_app.py
 ```
 
+**🚀 First Time Setup:** When you first run the application, the database and vector store won't exist yet. Simply:
+
+1. Click the **"📥 Download Database"** button to download the SQLite database
+2. Click the **"🔄 Initialize Vector Store"** button to create the vector embeddings
+3. Or click **"🚀 Complete Setup"** to perform both steps automatically
+4. Once setup is complete, you can start chatting with the AI assistant
+
+The setup buttons will only appear when needed and will be disabled once the respective components are properly initialized.
+
 ### Command Line Interface
 For direct integration or testing:
 
@@ -123,6 +143,38 @@ AI: "I'll help coordinate your complete Rome trip across all services..."
 │   Management    │    │   Management     │    │   Assistants    │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
+
+### Main Graph Flow Architecture
+
+The system follows a sophisticated multi-workflow architecture where conversations flow through specialized assistants based on user intent and context:
+
+#### **Core Flow Pattern:**
+1. **Entry Point** (`start`) → **User Information Gathering** (`get_user_info`)
+2. **Primary Assistant Hub** - Central coordinator for all conversations
+3. **Workflow Routing** (`route_to_workflow`) - Intelligent delegation to specialized assistants
+4. **Specialized Workflow Processing** - Domain-specific assistance with human-in-the-loop approval
+5. **Return to Hub** - Seamless transition back to primary assistant for continued conversation
+
+#### **Flight Workflow Details:**
+The flight workflow exemplifies the detailed internal structure of each specialized assistant:
+
+- **Entry Point** (`create_entry_point`) - Initializes flight-specific context
+- **Flight Assistant** (`enter_update_flight`) - Specialized flight management agent
+- **Tool Execution Layer:**
+  - **Safe Tools** (`update_flight_safe_tools`) - Non-destructive operations (search, info lookup)
+  - **Sensitive Tools** (`update_flight_sensitive_tools`) - Modification operations requiring approval
+- **Skill Completion** (`leave_skill`) - Clean return to primary assistant with updated context
+- **State Management** - Maintains conversation flow using `pop_dialog_state()` pattern
+
+#### **Multi-Workflow Coordination:**
+- **Car Rental Workflow** (`car_rental_subgraph`) - Vehicle booking and management
+- **Hotel Workflow** (`hotel_subgraph`) - Accommodation search and reservations  
+- **Excursion Workflow** (`excursion_subgraph`) - Activity recommendations and bookings
+
+Each workflow follows the same pattern with entry points, specialized assistants, safe/sensitive tool separation, and controlled exit points, ensuring consistent user experience across all service domains.
+
+#### **Human-in-the-Loop Integration:**
+Critical operations (flight changes, bookings, cancellations) are routed through approval gates where users can review and approve/deny proposed actions before execution, maintaining safety and user control throughout the process.
 
 ### Core Components
 
@@ -246,6 +298,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **OpenAI**: For language models and embedding capabilities
 - **Streamlit**: For the intuitive web interface framework
 
+## 🤖 AI-Generated Documentation
+
+**Note:** This README and the comprehensive code comments throughout the project have been automatically generated using AI assistance. The documentation aims to provide clear, detailed explanations of the system architecture, usage patterns, and implementation details to help developers understand and extend the codebase effectively.
+
 ## 📞 Support
 
 For questions, issues, or feature requests:
@@ -253,6 +309,3 @@ For questions, issues, or feature requests:
 - **Documentation**: [Project Wiki](https://github.com/your-username/customer_support_ai/wiki)
 - **Discussions**: [GitHub Discussions](https://github.com/your-username/customer_support_ai/discussions)
 
----
-
-**Built with ❤️ for Swiss Airlines Customer Support Excellence** 
