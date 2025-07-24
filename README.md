@@ -4,7 +4,7 @@ A multi-workflow customer support AI system built with LangGraph, providing comp
 
 ## 📚 Based on LangGraph Tutorial
 
-This project is an evolution and extension of the original LangGraph customer support tutorial notebook available at: https://github.com/langchain-ai/langgraph/blob/main/docs/docs/tutorials/customer-support/customer-support.ipynb
+This project is an evolution and extension of the original LangGraph customer support tutorial [notebook](https://github.com/langchain-ai/langgraph/blob/main/docs/docs/tutorials/customer-support/customer-support.ipynb)
 
 The implementation has been enhanced with additional features including:
 - Multi-workflow conversation management
